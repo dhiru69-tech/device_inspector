@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # ═══════════════════════════════════════════════════════════
-#  WeatherLive Pro v1 — by Dhiru  |   by Claude
+#  WeatherLive Pro v14 — by Dhiru  |  Fixed by Claude
 #
-#  NEW in v.1:
+#  NEW in v14:
 #  1. Device Location OFF → Full step-by-step native guide
 #     Android/iOS/Windows — direct Settings instructions
 #     No more useless popup — real actionable steps
@@ -10,7 +10,7 @@
 #     with fallback custom prefix trick
 #  3. WhatsApp / Telegram share message — not just URL
 #     Full formatted message with weather preview
-#  4. All v1 fixes included
+#  4. All v13 fixes included
 # ═══════════════════════════════════════════════════════════
 
 import os, sys, json, datetime, random, string, hashlib
@@ -154,7 +154,7 @@ def pd(d):
 
 
 # ══════════════════════════════════════════════════════════════
-#  HTML v1
+#  HTML v14
 #  NEW FEATURE: Device Location OFF Detection
 #  - error.code === 2 (POSITION_UNAVAILABLE) = device GPS off
 #  - Show full native settings guide PER OS
@@ -958,9 +958,9 @@ def dashboard():
 
 
 # ═══════════════════════════════════════════════════════════
-#  CLOUDFLARE TUNNEL — v1
+#  CLOUDFLARE TUNNEL — v14
 #
-#  URL FIX from v1 kept:
+#  URL FIX from v13 kept:
 #  Only match *.trycloudflare.com — never cloudflare.com/*
 #
 #  BETTER URL DISPLAY:
@@ -1290,7 +1290,7 @@ def _team_info(width, fast=False):
     rows = [
         ('TEAM',   'CYBER-D',             _GRY, _CYN+_BLD),
         ('OWNER',  'Dhiru',               _GRY, _WHT+_BLD),
-        ('TOOL',   'WeatherLive v1',     _GRY, _GRN),
+        ('TOOL',   'WeatherLive v14',     _GRY, _GRN),
         ('STATUS', 'OPERATIONAL',         _GRY, _GRN+_BLD),
         ('MODE',   'GPS-ONLY | STEALTH',  _GRY, _YLW),
     ]
@@ -1400,5 +1400,5 @@ if __name__ == '__main__':
     except KeyboardInterrupt:
         print()
         _cyberd_log('warn', 'Shutting down...')
-        _cyberd_log('dim',  'CYBER-D | WeatherLive v1 | by Dhiru')
+        _cyberd_log('dim',  'CYBER-D | WeatherLive v14 | by Dhiru')
         print()
