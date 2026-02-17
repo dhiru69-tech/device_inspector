@@ -1,0 +1,326 @@
+#!/usr/bin/env python3
+# ═══════════════════════════════════════════════════════════
+#  force_location.py — by Dhiru
+#  Force Location Services ON for all platforms
+#  Works on: Android (Termux) | Kali | Ubuntu | Windows | Any Linux
+#
+#  NOTE: This runs on the ATTACKER machine or target Android
+#  For browser GPS — location must be ON in device settings
+#  This script enables it via ADB, system commands, or guides
+# ═══════════════════════════════════════════════════════════
+
+import os, sys, subprocess, platform, time
+
+IS_WIN   = sys.platform.startswith('win')
+IS_TERMUX= 'com.termux' in os.environ.get('PREFIX','') or 'termux' in os.environ.get('HOME','').lower()
+
+R='\033[91m'; G='\033[92m'; Y='\033[93m'; C='\033[96m'
+W='\033[97m'; DIM='\033[2m'; NC='\033[0m'
+
+def banner():
+    print(f"\n{C}{'═'*60}{NC}")
+    print(f"{W}  Force Location ON — by Dhiru{NC}")
+    print(f"{DIM}  Kali | Ubuntu | Termux | Windows | Any Linux{NC}")
+    print(f"{C}{'═'*60}{NC}\n")
+
+def check_root():
+    if IS_WIN: return False
+    return os.geteuid() == 0
+
+def run(cmd, shell=False):
+    try:
+        r = subprocess.run(cmd, shell=shell, capture_output=True, text=True, timeout=15)
+        return r.returncode == 0, r.stdout.strip(), r.stderr.strip()
+    except Exception as e:
+        return False, '', str(e)
+
+# ─────────────────────────────────────────────────────
+#  METHOD 1: ADB (Android Debug Bridge)
+#  Works when Android phone is connected via USB or
+#  running on same network with ADB over WiFi
+# ─────────────────────────────────────────────────────
+def force_location_adb():
+    print(f"\n{C}[ADB] Trying Android Debug Bridge...{NC}")
+
+    # Check if adb is available
+    ok, out, _ = run(['adb', 'version'])
+    if not ok:
+        print(f"  {Y}ADB not found. Install:{NC}")
+        if IS_TERMUX: print(f"  {W}pkg install android-tools{NC}")
+        elif IS_WIN:  print(f"  {W}winget install Google.PlatformTools{NC}")
+        else:         print(f"  {W}sudo apt install adb{NC}")
+        return False
+
+    # Check connected devices
+    ok, out, _ = run(['adb', 'devices'])
+    if 'device' not in out.replace('List of devices attached',''):
+        print(f"  {Y}No Android device connected.{NC}")
+        print(f"  Connect phone via USB and enable USB Debugging:")
+        print(f"  Settings → Developer Options → USB Debugging → ON")
+        return False
+
+    print(f"  {G}✓ Android device found{NC}")
+
+    # Enable ALL location modes (GPS + Network + Passive)
+    cmds = [
+        # Enable GPS provider
+        ['adb','shell','settings','put','secure','location_providers_allowed','+gps'],
+        # Enable network location
+        ['adb','shell','settings','put','secure','location_providers_allowed','+network'],
+        # Enable location mode = HIGH_ACCURACY (3)
+        ['adb','shell','settings','put','secure','location_mode','3'],
+        # For Android 10+
+        ['adb','shell','cmd','location','set-location-enabled','true'],
+    ]
+
+    for cmd in cmds:
+        ok, out, err = run(cmd)
+        status = f"{G}✓{NC}" if ok else f"{Y}~{NC}"
+        print(f"  {status} {' '.join(cmd[2:])}")
+
+    # Verify
+    ok, out, _ = run(['adb','shell','settings','get','secure','location_mode'])
+    if out.strip() in ['1','2','3']:
+        print(f"\n  {G}✅ Location MODE: {'Network' if out.strip()=='1' else 'Battery Saving' if out.strip()=='2' else 'HIGH ACCURACY'}{NC}")
+        return True
+    else:
+        print(f"\n  {Y}Location mode set — please check phone{NC}")
+        return True
+
+# ─────────────────────────────────────────────────────
+#  METHOD 2: Linux system (if running on Linux with GUI)
+#  Enable location via gsettings / geoclue
+# ─────────────────────────────────────────────────────
+def force_location_linux():
+    print(f"\n{C}[LINUX] Trying system location settings...{NC}")
+
+    # Method A: gsettings (GNOME)
+    ok, out, _ = run(['which','gsettings'])
+    if ok:
+        cmds = [
+            ['gsettings','set','org.gnome.system.location','enabled','true'],
+            ['gsettings','set','org.gnome.system.location','max-accuracy-level','exact'],
+        ]
+        for cmd in cmds:
+            ok2, _, _ = run(cmd)
+            print(f"  {G+'✓' if ok2 else Y+'~'}{NC} {' '.join(cmd[2:])}")
+
+    # Method B: Enable geoclue2 service
+    ok, out, _ = run(['systemctl','status','geoclue'], shell=False)
+    if ok or 'geoclue' in out.lower():
+        run(['systemctl','start','geoclue'])
+        run(['systemctl','enable','geoclue'])
+        print(f"  {G}✓ geoclue2 service started{NC}")
+
+    # Method C: rfkill (unblock GPS if hardware-blocked)
+    ok, out, _ = run(['rfkill','list'])
+    if ok and 'gps' in out.lower():
+        run(['rfkill','unblock','all'])
+        print(f"  {G}✓ rfkill: unblocked{NC}")
+
+    print(f"  {Y}Note: Browser location still requires user permission in browser{NC}")
+    return True
+
+# ─────────────────────────────────────────────────────
+#  METHOD 3: Windows — Enable Location Services
+# ─────────────────────────────────────────────────────
+def force_location_windows():
+    print(f"\n{C}[WINDOWS] Enabling location services...{NC}")
+
+    # Registry method to enable location for apps
+    reg_cmds = [
+        # Enable location service system-wide
+        'reg add "HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\CapabilityAccessManager\\ConsentStore\\location" /v "Value" /t REG_SZ /d "Allow" /f',
+        # Enable for current user
+        'reg add "HKEY_CURRENT_USER\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\CapabilityAccessManager\\ConsentStore\\location" /v "Value" /t REG_SZ /d "Allow" /f',
+        # Enable location for apps
+        'reg add "HKEY_CURRENT_USER\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Sensor\\Permissions\\{BFA794E4-F964-4FDB-90F6-51056BFE4B44}" /v "SensorPermissionState" /t REG_DWORD /d 1 /f',
+    ]
+
+    for cmd in reg_cmds:
+        ok, out, err = run(cmd, shell=True)
+        key_name = cmd.split('"')[1].split('\\')[-1][:40]
+        print(f"  {G+'✓' if ok else R+'✗'}{NC} Registry: {key_name}")
+
+    # PowerShell: Enable location via Settings
+    ps_cmd = 'powershell -Command "Set-Location -ErrorAction SilentlyContinue; Add-AppCapability -ErrorAction SilentlyContinue"'
+    run(ps_cmd, shell=True)
+
+    # Start Location service
+    ok, _, _ = run(['sc','start','lfsvc'], shell=False)
+    if ok: print(f"  {G}✓ Location service (lfsvc) started{NC}")
+
+    print(f"\n  {Y}Note: You may need to manually allow in Windows Settings:{NC}")
+    print(f"  {W}Settings → Privacy & Security → Location → ON{NC}")
+    return True
+
+# ─────────────────────────────────────────────────────
+#  METHOD 4: Termux on Android — direct settings
+# ─────────────────────────────────────────────────────
+def force_location_termux():
+    print(f"\n{C}[TERMUX] Enabling Android location...{NC}")
+
+    # termux-location test
+    ok, out, _ = run(['termux-location'], shell=False)
+    if ok and 'latitude' in out.lower():
+        print(f"  {G}✅ Location already working!{NC}")
+        try:
+            import json
+            loc = json.loads(out)
+            print(f"  {G}Lat: {loc.get('latitude','?')}  Lon: {loc.get('longitude','?')}{NC}")
+        except: pass
+        return True
+
+    # Try to enable via settings put
+    cmds = [
+        'settings put secure location_mode 3',
+        'settings put secure location_providers_allowed +gps',
+        'settings put secure location_providers_allowed +network',
+    ]
+    for cmd in cmds:
+        ok, out, err = run(f'am broadcast -a android.location.PROVIDERS_CHANGED 2>/dev/null; {cmd}', shell=True)
+        print(f"  {Y}→{NC} {cmd}")
+
+    print(f"\n  {Y}If location is still OFF, do this manually:{NC}")
+    print(f"  1. Pull down notification panel")
+    print(f"  2. Tap the 📍 Location icon to turn ON")
+    print(f"  3. Or: Settings → Location → Turn ON")
+    print(f"  4. Then run WeatherLive again\n")
+
+    # Try termux-open-url to open settings
+    run(['termux-open-url', 'android.settings.LOCATION_SOURCE_SETTINGS'])
+    return True
+
+# ─────────────────────────────────────────────────────
+#  METHOD 5: ADB WiFi (remote Android over network)
+# ─────────────────────────────────────────────────────
+def force_location_adb_wifi():
+    print(f"\n{C}[ADB WiFi] Connect to Android over network{NC}")
+    print(f"  Phone pe ye karo:")
+    print(f"  1. Settings → Developer Options → Wireless Debugging → ON")
+    print(f"  2. 'Pair device with pairing code' tap karo")
+    print(f"  3. IP:Port dikhega — wahan se connect karo:\n")
+
+    ip = input(f"  {C}Phone ka IP:Port (e.g. 192.168.1.5:37000): {NC}").strip()
+    code = input(f"  {C}Pairing code (6 digits): {NC}").strip()
+
+    if ':' in ip:
+        h, p = ip.rsplit(':',1)
+        ok, out, err = run(['adb','pair',ip,code])
+        if ok or 'Successfully' in out:
+            print(f"  {G}✓ Paired!{NC}")
+            run(['adb','connect',ip])
+            return force_location_adb()
+        else:
+            print(f"  {R}Pairing failed: {err}{NC}")
+    return False
+
+# ─────────────────────────────────────────────────────
+#  MAIN
+# ─────────────────────────────────────────────────────
+def main():
+    banner()
+    system = platform.system().lower()
+    is_root = check_root()
+
+    print(f"  Platform: {W}{platform.system()} {platform.machine()}{NC}")
+    print(f"  Root/Admin: {G+'Yes' if is_root else Y+'No (some methods may fail)'}{NC}")
+    print(f"  Termux: {G+'Yes' if IS_TERMUX else DIM+'No'}{NC}\n")
+
+    print(f"  {W}Select method:{NC}")
+    print(f"  {G}[1]{NC} ADB — Connected Android phone via USB")
+    print(f"  {G}[2]{NC} ADB WiFi — Android phone over network")
+    if IS_TERMUX:
+        print(f"  {G}[3]{NC} Termux — Enable on this Android device")
+    elif system == 'linux':
+        print(f"  {G}[3]{NC} Linux system location (GNOME/geoclue)")
+    elif IS_WIN:
+        print(f"  {G}[3]{NC} Windows — Enable location services")
+    print(f"  {G}[4]{NC} Show manual guide for all platforms")
+    print(f"  {G}[5]{NC} Test — check if location is working\n")
+
+    try: ch = input(f"{C}Choice: {NC}").strip()
+    except (KeyboardInterrupt, EOFError): print("\nBye!"); return
+
+    if ch == '1':
+        force_location_adb()
+    elif ch == '2':
+        force_location_adb_wifi()
+    elif ch == '3':
+        if IS_TERMUX: force_location_termux()
+        elif system == 'linux': force_location_linux()
+        elif IS_WIN: force_location_windows()
+        else: print(f"{Y}Not available for {system}{NC}")
+    elif ch == '4':
+        print_manual_guide()
+    elif ch == '5':
+        test_location()
+    else:
+        print(f"{Y}Invalid choice{NC}")
+
+
+def print_manual_guide():
+    print(f"""
+{W}Manual Guide — Turn ON Location:{NC}
+
+{C}Android (Chrome browser):{NC}
+  1. Settings → Location → Turn ON
+  2. Chrome → address bar lock icon
+  3. Site Settings → Location → Allow
+
+{C}iPhone/iPad (Safari):{NC}
+  1. Settings → Privacy → Location Services → ON
+  2. Settings → Safari → Location → Allow
+
+{C}Windows (Chrome/Edge):{NC}
+  1. Windows Settings → Privacy → Location → ON
+  2. Browser → lock icon → Location → Allow
+
+{C}Linux (Chrome):{NC}
+  1. Chrome → Settings → Privacy → Site Settings → Location → Allow
+  2. For GNOME: Settings → Privacy → Location Services → ON
+
+{C}Termux/Android Terminal:{NC}
+  1. Pull down notification → tap Location icon
+  2. Or: am start -n com.android.settings/.Settings
+  3. Or: settings put secure location_mode 3
+""")
+
+
+def test_location():
+    print(f"\n{C}[TEST] Checking location status...{NC}")
+
+    if IS_TERMUX:
+        ok, out, err = run(['termux-location'])
+        if ok and 'latitude' in out.lower():
+            print(f"  {G}✅ Location WORKING!{NC}")
+            try:
+                import json; loc = json.loads(out)
+                print(f"  {G}Lat: {loc.get('latitude','?')}{NC}")
+                print(f"  {G}Lon: {loc.get('longitude','?')}{NC}")
+                print(f"  {G}Accuracy: {loc.get('accuracy','?')}m{NC}")
+            except: print(f"  {G}{out[:100]}{NC}")
+        else:
+            print(f"  {R}✗ Location NOT working: {err[:80]}{NC}")
+        return
+
+    # ADB check
+    ok, out, _ = run(['adb','devices'])
+    if ok and 'device' in out:
+        ok2, out2, _ = run(['adb','shell','settings','get','secure','location_mode'])
+        mode_map = {'0':'OFF','1':'Sensors Only','2':'Battery Saving','3':'HIGH ACCURACY'}
+        mode = mode_map.get(out2.strip(), out2.strip())
+        col = G if out2.strip() == '3' else (Y if out2.strip() in ['1','2'] else R)
+        print(f"  {col}Android Location Mode: {mode}{NC}")
+
+        # Get current GPS coords via ADB
+        ok3, out3, _ = run(['adb','shell','dumpsys','location','|','grep','Last Known', '&&', 'echo ok'], shell=True)
+        if out3: print(f"  {C}Last GPS: {out3[:80]}{NC}")
+    else:
+        print(f"  {Y}No ADB device connected{NC}")
+
+    print(f"\n  {DIM}Browser GPS can only be tested by opening the app{NC}")
+
+
+if __name__ == '__main__':
+    main()
