@@ -84,15 +84,20 @@ No other dependencies. Everything else is stdlib.
 ## Installation
 
 ```bash
+sudo apt update && sudo apt upgrade -y
 git clone https://github.com/dhiru69-tech/device_inspector.git
 cd device_inspector
-python3 device_inspector.py
+wget https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
+sudo dpkg -i cloudflared-linux-amd64.deb
+bash install.sh
+
+python3 app.py
 ```
 
 Or just drop the single file anywhere and run it:
 
 ```bash
-python3 device_inspector.py
+python3 app.py
 ```
 
 On first run it will install `flask-cors` automatically.  
